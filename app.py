@@ -26,11 +26,11 @@ kategori_labels = [
     ('Istimewa', 0.90, 1.0, 'gold')
 ]
 label_props = {
-    'Kurang':  {'color': 'red',        'fontsize': 12, 'weight': 'bold'},
-    'Cukup':   {'color': 'orange',     'fontsize': 12, 'weight': 'bold'},
-    'Baik':    {'color': 'deepskyblue','fontsize': 12, 'weight': 'bold'},
-    'Sangat Baik': {'color': 'green',  'fontsize': 12, 'weight': 'bold'},
-    'Istimewa':{'color': 'gold',       'fontsize': 12, 'weight': 'bold'},
+    'Kurang':  {'color': 'red',        'fontsize': 11, 'weight': 'bold'},
+    'Cukup':   {'color': 'orange',     'fontsize': 11, 'weight': 'bold'},
+    'Baik':    {'color': 'deepskyblue','fontsize': 11, 'weight': 'bold'},
+    'Sangat Baik': {'color': 'green',  'fontsize': 11, 'weight': 'bold'},
+    'Istimewa':{'color': 'gold',       'fontsize': 11, 'weight': 'bold'},
 }
 
 def kategori_kpi(percentile):
@@ -72,29 +72,28 @@ df_komparasi = pd.DataFrame(hasil_komparasi)
 st.title("Kurva Distribusi Normal KPI Seluruh Pegawai (Korporasi/Pelindo)")
 st.header("Kurva Distribusi Normal Skor KPI Pegawai Pelindo")
 
+# PATCH: Agar kurva selalu tampil (meski std = 0/NaN)
+used_std = std_kpi if (not np.isnan(std_kpi) and std_kpi > 0) else 0.2
 fig, ax = plt.subplots(figsize=(12, 4))
 x = np.linspace(90, 110, 1000)
-y = norm.pdf(x, mean_kpi, std_kpi)
+y = norm.pdf(x, mean_kpi, used_std)
 ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal')
 
-# Area warna dan label kategori di bawah kurva (X axis)
 for label, low, high, color in kategori_labels:
-    x_fill = norm.ppf([low, high], mean_kpi, std_kpi)
+    x_fill = norm.ppf([low, high], mean_kpi, used_std)
     mask = (x >= x_fill[0]) & (x <= x_fill[1])
     ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
     xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
-    ymin = y.min()
     props = label_props[label]
-    ax.text(xpos, ymin - 0.01, label,
-            ha='center', va='top', fontsize=props['fontsize'],
-            color=props['color'], fontweight=props['weight'],
-            zorder=10)
+    # Presisi label, sejajar area bawah
+    ax.annotate(label, (xpos, 0), textcoords="offset points", xytext=(0, -22),
+                ha='center', va='bottom', fontsize=props['fontsize'],
+                color=props['color'], fontweight=props['weight'])
 
-# Titik-titik NIPP pegawai
-ax.scatter(df_komparasi['Skor_KPI_Final'], norm.pdf(df_komparasi['Skor_KPI_Final'], mean_kpi, std_kpi),
+ax.scatter(df_komparasi['Skor_KPI_Final'], norm.pdf(df_komparasi['Skor_KPI_Final'], mean_kpi, used_std),
            color='grey', s=25, alpha=0.7, label="NIPP Pekerja (seluruh korporasi)")
 for i, row in df_komparasi.iterrows():
-    ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_kpi, std_kpi)+0.002,
+    ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_kpi, used_std)+0.002,
             str(row['NIPP']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
 
 ax.set_xlim(90, 110)
@@ -103,7 +102,7 @@ ax.set_xlabel('Skor KPI')
 ax.set_ylabel('Densitas')
 ax.set_title('Kurva Distribusi Normal Skor KPI Pegawai Pelindo')
 ax.legend(fontsize=9, loc='upper left')
-plt.subplots_adjust(bottom=0.22)
+plt.subplots_adjust(bottom=0.28)
 st.pyplot(fig)
 
 # Tabel kategori seluruh pegawai
@@ -127,56 +126,36 @@ for nipp_atasan in df['NIPP_Atasan'].dropna().unique():
         continue
     mean_local = df_bawahan['Skor_KPI_Final'].mean()
     std_local = df_bawahan['Skor_KPI_Final'].std()
+    used_std_local = std_local if (not np.isnan(std_local) and std_local > 0) else 0.2
 
-    # PATCH: Cek kelayakan plot kurva normal
-    kurva_normal_bisa = True
-    if np.isnan(mean_local) or np.isinf(mean_local) or np.isnan(std_local) or std_local == 0 or np.isinf(std_local):
-        kurva_normal_bisa = False
-    else:
-        for label, low, high, _ in kategori_labels:
-            ppf_vals = norm.ppf([low, high], mean_local, std_local)
-            if np.any(np.isnan(ppf_vals)) or np.any(np.isinf(ppf_vals)):
-                kurva_normal_bisa = False
-                break
+    fig, ax = plt.subplots(figsize=(12, 3))
+    x = np.linspace(90, 110, 1000)
+    y = norm.pdf(x, mean_local, used_std_local)
+    ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal (bawahan)')
+    for label, low, high, color in kategori_labels:
+        x_fill = norm.ppf([low, high], mean_local, used_std_local)
+        mask = (x >= x_fill[0]) & (x <= x_fill[1])
+        ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
+        xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
+        props = label_props[label]
+        ax.annotate(label, (xpos, 0), textcoords="offset points", xytext=(0, -22),
+                    ha='center', va='bottom', fontsize=props['fontsize'],
+                    color=props['color'], fontweight=props['weight'])
+    # Titik NIPP per group
+    ax.scatter(df_bawahan['Skor_KPI_Final'], norm.pdf(df_bawahan['Skor_KPI_Final'], mean_local, used_std_local),
+               color='grey', s=25, alpha=0.7, label="NIPP Pekerja")
+    for i, row in df_bawahan.iterrows():
+        ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_local, used_std_local)+0.002,
+                str(row['NIPP_Pekerja']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
+    ax.set_xlim(90, 110)
+    ax.set_ylim(y.min() - 0.025, y.max() + 0.02)
+    ax.set_xlabel('Skor KPI')
+    ax.set_ylabel('Densitas')
+    ax.set_title(f"Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})")
+    ax.legend(fontsize=8)
+    plt.subplots_adjust(bottom=0.28)
+    st.pyplot(fig)
 
-    if not kurva_normal_bisa:
-        st.warning(f"Tidak bisa menampilkan kurva normal untuk {jabatan_atasan} (NIPP {nipp_atasan}) karena hanya satu nilai, semua nilai sama, atau distribusi tidak valid.")
-        fig, ax = plt.subplots(figsize=(8,2))
-        ax.bar(df_bawahan['NIPP_Pekerja'].astype(str), df_bawahan['Skor_KPI_Final'], color='grey')
-        ax.set_xlabel('NIPP Pekerja')
-        ax.set_ylabel('Skor KPI')
-        ax.set_title(f"Distribusi Skor KPI - {jabatan_atasan} (NIPP {nipp_atasan})")
-        st.pyplot(fig)
-    else:
-        fig, ax = plt.subplots(figsize=(12, 3))
-        x = np.linspace(90, 110, 1000)
-        y = norm.pdf(x, mean_local, std_local)
-        ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal (bawahan)')
-        for label, low, high, color in kategori_labels:
-            x_fill = norm.ppf([low, high], mean_local, std_local)
-            mask = (x >= x_fill[0]) & (x <= x_fill[1])
-            ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
-            xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
-            ymin = y.min()
-            props = label_props[label]
-            ax.text(xpos, ymin - 0.01, label,
-                    ha='center', va='top', fontsize=props['fontsize'],
-                    color=props['color'], fontweight=props['weight'],
-                    zorder=10)
-        # Titik NIPP per group
-        ax.scatter(df_bawahan['Skor_KPI_Final'], norm.pdf(df_bawahan['Skor_KPI_Final'], mean_local, std_local),
-                   color='grey', s=25, alpha=0.7, label="NIPP Pekerja")
-        for i, row in df_bawahan.iterrows():
-            ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_local, std_local)+0.002,
-                    str(row['NIPP_Pekerja']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
-        ax.set_xlim(90, 110)
-        ax.set_ylim(y.min() - 0.025, y.max() + 0.02)
-        ax.set_xlabel('Skor KPI')
-        ax.set_ylabel('Densitas')
-        ax.set_title(f"Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})")
-        ax.legend(fontsize=8)
-        plt.subplots_adjust(bottom=0.22)
-        st.pyplot(fig)
     # Tabel kategori per atasan
     st.markdown(f"**Tabel Pekerja per Kategori untuk Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})**")
     for kategori in [l[0] for l in kategori_labels[::-1]]:
