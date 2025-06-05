@@ -6,7 +6,6 @@ from scipy.stats import norm
 
 # Fungsi kategori
 def kategori_from_score(x, all_scores):
-    # Hitung batasan sesuai deskripsi: 0-10%-20%-70%-90%-100%
     p = np.percentile(all_scores, [5, 20, 80, 95])
     if x <= p[0]: return 'Kurang'
     elif x <= p[1]: return 'Cukup'
@@ -16,48 +15,51 @@ def kategori_from_score(x, all_scores):
 
 # Definisi warna & label kategori
 kategori_labels = [
-    ('Kurang',    '#ff9999',  'red',      0.07, 'Kurang'),
-    ('Cukup',     '#ffe4b2',  'orange',   0.19, 'Cukup'),
-    ('Baik',      '#b2e1ff',  'deepskyblue', 0.47, 'Baik'),
-    ('Sangat Baik','#a6e3a1', 'green',    0.86, 'Sangat Baik'),
-    ('Istimewa',  '#ffe066',  'gold',     0.97, 'Istimewa'),
+    ('Kurang',    '#ff9999',  'red',        'Kurang'),
+    ('Cukup',     '#ffe4b2',  'orange',     'Cukup'),
+    ('Baik',      '#b2e1ff',  'deepskyblue','Baik'),
+    ('Sangat Baik','#a6e3a1', 'green',      'Sangat Baik'),
+    ('Istimewa',  '#ffe066',  'gold',       'Istimewa'),
 ]
 
 def plot_kurva(scores, nipps, title):
-    # Penyesuaian range
+    # Range tetap
     x_min, x_max = 90, 110
     scores = np.clip(scores, x_min, x_max)
     mu, sigma = np.mean(scores), np.std(scores) if np.std(scores) > 0 else 1e-3
-
-    # Buat figure
-    fig, ax = plt.subplots(figsize=(10, 4.2))
     x = np.linspace(x_min, x_max, 400)
     y = norm.pdf(x, mu, sigma)
-    ax.plot(x, y, color='black', lw=3, label='Kurva Normal')
-    
-    # Area kategori (kurang-cukup-baik-sangat baik-istimewa)
+
+    # Percentiles untuk area
     percentiles = np.percentile(scores, [5, 20, 80, 95])
     batas = [x_min, percentiles[0], percentiles[1], percentiles[2], percentiles[3], x_max]
-    for i, (label, color, fontcolor, xpos, lbl_txt) in enumerate(kategori_labels):
-        ax.axvspan(batas[i], batas[i+1], color=color, alpha=0.35, label=label if i == 0 else None)
 
-    # Titik NIPP
-    ax.scatter(scores, norm.pdf(scores, mu, sigma), color='grey', alpha=0.7, s=55, label='NIPP Pekerja (seluruh korporasi)')
-    # Tampilkan NIPP di bawah titik
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    
+    # Background area
+    for i, (label, color, fontcolor, lbl_txt) in enumerate(kategori_labels):
+        ax.axvspan(batas[i], batas[i+1], color=color, alpha=0.3, label=label if i == 0 else None)
+    
+    # Kurva normal
+    ax.plot(x, y, color='black', lw=3, label='Kurva Normal')
+    
+    # Titik NIPP (scatter di bawah sumbu X)
+    ymin = -0.015 * y.max()
+    ax.scatter(scores, np.full_like(scores, ymin), color='grey', alpha=0.7, s=55, label='NIPP Pekerja')
+    # Label NIPP di bawah titik
     for sc, nipp in zip(scores, nipps):
-        ax.annotate(str(int(nipp)), xy=(sc, -0.008), fontsize=7, ha='center', rotation=90)
+        ax.annotate(str(int(nipp)), xy=(sc, ymin - 0.01), fontsize=7, ha='center', rotation=90)
 
-    # X-axis dan label kategori di bawah kurva
-    for i, (label, color, fontcolor, xpos, lbl_txt) in enumerate(kategori_labels):
+    # Label kategori rapi di bawah sumbu X
+    for i, (label, color, fontcolor, lbl_txt) in enumerate(kategori_labels):
         xtext = (batas[i]+batas[i+1])/2
-        ax.text(xtext, -0.028, lbl_txt, fontsize=13, color=fontcolor, weight='bold', ha='center', va='top')
-        
-    # Axis
+        ax.text(xtext, ymin - 0.035, lbl_txt, fontsize=12, color=fontcolor, weight='bold', ha='center', va='top')
+
     ax.set_xlim(x_min, x_max)
-    ax.set_ylim(-0.04, None)
+    ax.set_ylim(ymin - 0.06, y.max() * 1.05)
     ax.set_xlabel('Skor KPI')
     ax.set_ylabel('Densitas')
-    ax.legend(loc='upper left', fontsize=11)
+    ax.legend(loc='upper left', fontsize=10)
     ax.set_title(title, fontsize=15)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -81,7 +83,7 @@ plot_kurva(all_scores, all_nipps, "Kurva Distribusi Normal Skor KPI Pegawai Peli
 
 # --- Tabel kategori seluruh pegawai
 st.subheader("Tabel Pegawai Berdasarkan Kategori (Seluruh Pegawai)")
-for label, _, _, _, _ in kategori_labels:
+for label, _, _, _ in kategori_labels:
     df_label = df[df['Skor_KPI_Final'].apply(lambda x: kategori_from_score(x, all_scores)) == label][['NIPP_Pekerja', 'Nama_Posisi', 'Skor_KPI_Final']]
     st.markdown(f"**{label}**")
     st.write(df_label.reset_index(drop=True))
@@ -101,7 +103,7 @@ if len(df_group) > 0:
 
     st.subheader(f"Tabel Pegawai Berdasarkan Kategori KPI ({pilihan_atasan})")
     group_scores_all = group_scores
-    for label, _, _, _, _ in kategori_labels:
+    for label, _, _, _ in kategori_labels:
         df_label = df_group[
             df_group['Skor_KPI_Final'].apply(lambda x: kategori_from_score(x, group_scores_all)) == label
         ][['NIPP_Pekerja', 'Nama_Posisi', 'Skor_KPI_Final']]
