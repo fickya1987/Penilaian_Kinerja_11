@@ -4,7 +4,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm
 
-# --- Load Data ---
+# ===================== KONFIGURASI KATEGORI ===================== #
+kategori_labels = [
+    ("Kurang",       0.00, 0.05, '#ff9999',    'red'),
+    ("Cukup",        0.05, 0.10, '#ffe5b4',    'orange'),
+    ("Baik",         0.10, 0.85, '#b3e0ff',    'deepskyblue'),
+    ("Sangat Baik",  0.85, 0.97, '#b4ffb4',    'green'),
+    ("Istimewa",     0.97, 1.00, '#fff399',    'gold'),
+]
+
+# ===================== DATA LOADER ===================== #
 @st.cache_data
 def load_data():
     df = pd.read_csv("Penilaian_Kinerja.csv")
@@ -15,15 +24,7 @@ df = load_data()
 scores = df['Skor_KPI_Final'].clip(lower=90, upper=110).values
 nipps = df['NIPP_Pekerja'].values
 
-# --- Kategori & Warna ---
-kategori_labels = [
-    ("Kurang",       0.00, 0.05, '#ff9999', 'red'),
-    ("Cukup",        0.05, 0.10, '#ffe5b4', 'orange'),
-    ("Baik",         0.10, 0.85, '#b3e0ff', 'deepskyblue'),
-    ("Sangat Baik",  0.85, 0.97, '#b4ffb4', 'green'),
-    ("Istimewa",     0.97, 1.00, '#fff399', 'gold'),
-]
-
+# ===================== KATEGORI FUNGSIONAL ===================== #
 def kategori_from_score(score, scores):
     percentiles = np.percentile(scores, [5, 10, 85, 97])
     if score < percentiles[0]:
@@ -39,19 +40,19 @@ def kategori_from_score(score, scores):
 
 df['Kategori_KPI'] = df['Skor_KPI_Final'].apply(lambda x: kategori_from_score(x, scores))
 
-# --- Fungsi Plot Kurva ---
+# ===================== PLOTTING FUNCTION ===================== #
 def plot_kurva(scores, nipp_list=None, title=None):
     mean_kpi = np.mean(scores)
     std_kpi = np.std(scores)
     x = np.linspace(90, 110, 1000)
-    y = norm.pdf(x, mean_kpi, std_kpi if std_kpi>0 else 0.1)
+    y = norm.pdf(x, mean_kpi, std_kpi if std_kpi > 0 else 0.1)
 
     fig, ax = plt.subplots(figsize=(13, 5))
-    # Fill kategori area
     xlims = []
+    # Fill background area kategori
     for label, pmin, pmax, fill_color, _ in kategori_labels:
-        xmin = np.clip(norm.ppf(pmin, mean_kpi, std_kpi if std_kpi>0 else 0.1), 90, 110)
-        xmax = np.clip(norm.ppf(pmax, mean_kpi, std_kpi if std_kpi>0 else 0.1), 90, 110)
+        xmin = np.clip(norm.ppf(pmin, mean_kpi, std_kpi if std_kpi > 0 else 0.1), 90, 110)
+        xmax = np.clip(norm.ppf(pmax, mean_kpi, std_kpi if std_kpi > 0 else 0.1), 90, 110)
         ax.fill_between(x, 0, y, where=(x >= xmin) & (x <= xmax), color=fill_color, alpha=0.4)
         xlims.append((xmin, xmax))
 
@@ -85,8 +86,9 @@ def plot_kurva(scores, nipp_list=None, title=None):
     ax2.set_xlabel("")
     st.pyplot(fig)
 
-# --- Main: Kurva & Tabel Seluruh Pegawai
+# ===================== MAIN PAGE ===================== #
 st.title("Kurva Distribusi Normal KPI Seluruh Pegawai (Korporasi/Pelindo)")
+
 plot_kurva(scores, nipps, title="Kurva Distribusi Normal Skor KPI Pegawai Pelindo")
 
 st.header("Tabel Pegawai Berdasarkan Kategori KPI (Seluruh Pegawai)")
@@ -95,7 +97,7 @@ for label, _, _, _, _ in kategori_labels:
     st.subheader(label)
     st.write(df_label.reset_index(drop=True))
 
-# --- Analisis Per Group/Atasan Langsung
+# ===================== ANALISIS GROUP/ATASAN ===================== #
 st.header("Analisis Per Group/Atasan Langsung (Nama_Posisi)")
 list_atasan = sorted(df['Nama_Posisi'].unique())
 pilihan_atasan = st.selectbox(
@@ -118,4 +120,3 @@ if len(df_group) > 1:
         st.write(df_label.reset_index(drop=True))
 else:
     st.info("Data group terlalu sedikit untuk menampilkan kurva distribusi normal.")
-
