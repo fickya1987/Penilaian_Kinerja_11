@@ -68,6 +68,7 @@ for idx, row in df.iterrows():
 
 df_komparasi = pd.DataFrame(hasil_komparasi)
 
+# ---------- KURVA & TABEL SELURUH PEGAWAI ----------
 st.title("Kurva Distribusi Normal KPI Seluruh Pegawai (Korporasi/Pelindo)")
 st.header("Kurva Distribusi Normal Skor KPI Pegawai Pelindo")
 
@@ -81,7 +82,6 @@ for label, low, high, color in kategori_labels:
     x_fill = norm.ppf([low, high], mean_kpi, std_kpi)
     mask = (x >= x_fill[0]) & (x <= x_fill[1])
     ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
-    # Letakkan label di bawah titik tengah area
     xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
     ymin = y.min()
     props = label_props[label]
@@ -106,7 +106,7 @@ ax.legend(fontsize=9, loc='upper left')
 plt.subplots_adjust(bottom=0.22)
 st.pyplot(fig)
 
-# (Opsional) Tabel kategori
+# Tabel kategori seluruh pegawai
 st.header("Daftar Pekerja per Kategori Distribusi Normal KPI (Seluruh Korporasi)")
 for label, _, _, _ in kategori_labels[::-1]:
     st.subheader(f"Kategori: {label}")
@@ -115,3 +115,54 @@ for label, _, _, _ in kategori_labels[::-1]:
         st.write("Tidak ada.")
     else:
         st.dataframe(df_kat, hide_index=True)
+
+# ---------- KURVA & TABEL PER ATASAN LANGSUNG (GROUP/DEPT) ----------
+st.header("Kurva Distribusi Normal KPI untuk Tiap Atasan Langsung (Group/Dept)")
+for nipp_atasan in df['NIPP_Atasan'].dropna().unique():
+    if pd.isna(nipp_atasan) or nipp_atasan == '' or nipp_atasan not in df['NIPP_Pekerja'].values:
+        continue
+    jabatan_atasan = df[df['NIPP_Pekerja'] == nipp_atasan][jabatan_col].iloc[0]
+    df_bawahan = df[df['NIPP_Atasan'] == nipp_atasan][['NIPP_Pekerja', jabatan_col, 'Skor_KPI_Final']]
+    if df_bawahan.empty:
+        continue
+    mean_local = df_bawahan['Skor_KPI_Final'].mean()
+    std_local = df_bawahan['Skor_KPI_Final'].std()
+    fig, ax = plt.subplots(figsize=(12, 3))
+    x = np.linspace(90, 110, 1000)
+    y = norm.pdf(x, mean_local, std_local)
+    ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal (bawahan)')
+    for label, low, high, color in kategori_labels:
+        x_fill = norm.ppf([low, high], mean_local, std_local)
+        mask = (x >= x_fill[0]) & (x <= x_fill[1])
+        ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
+        xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
+        ymin = y.min()
+        props = label_props[label]
+        ax.text(xpos, ymin - 0.01, label,
+                ha='center', va='top', fontsize=props['fontsize'],
+                color=props['color'], fontweight=props['weight'],
+                zorder=10)
+    # Titik NIPP per group
+    ax.scatter(df_bawahan['Skor_KPI_Final'], norm.pdf(df_bawahan['Skor_KPI_Final'], mean_local, std_local),
+               color='grey', s=25, alpha=0.7, label="NIPP Pekerja")
+    for i, row in df_bawahan.iterrows():
+        ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_local, std_local)+0.002,
+                str(row['NIPP_Pekerja']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
+    ax.set_xlim(90, 110)
+    ax.set_ylim(y.min() - 0.025, y.max() + 0.02)
+    ax.set_xlabel('Skor KPI')
+    ax.set_ylabel('Densitas')
+    ax.set_title(f"Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})")
+    ax.legend(fontsize=8)
+    plt.subplots_adjust(bottom=0.22)
+    st.pyplot(fig)
+    # Tabel kategori per atasan
+    st.markdown(f"**Tabel Pekerja per Kategori untuk Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})**")
+    for kategori in [l[0] for l in kategori_labels[::-1]]:
+        df_bawah_cat = df_komparasi[(df_komparasi['NIPP_Atasan'] == nipp_atasan) &
+                                    (df_komparasi['Kategori_Distribusi'] == kategori)][['NIPP', 'Nama_Posisi', 'Skor_KPI_Final']]
+        st.markdown(f"*Kategori: {kategori}*")
+        if df_bawah_cat.empty:
+            st.write("Tidak ada.")
+        else:
+            st.dataframe(df_bawah_cat, hide_index=True)
