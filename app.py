@@ -128,9 +128,19 @@ for nipp_atasan in df['NIPP_Atasan'].dropna().unique():
     mean_local = df_bawahan['Skor_KPI_Final'].mean()
     std_local = df_bawahan['Skor_KPI_Final'].std()
 
-    # Tambahan: tangani std=0 atau NaN
-    if np.isnan(std_local) or std_local == 0:
-        st.warning(f"Tidak bisa menampilkan kurva normal untuk {jabatan_atasan} (NIPP {nipp_atasan}) karena hanya satu nilai atau semua nilai sama.")
+    # PATCH: Cek kelayakan plot kurva normal
+    kurva_normal_bisa = True
+    if np.isnan(mean_local) or np.isinf(mean_local) or np.isnan(std_local) or std_local == 0 or np.isinf(std_local):
+        kurva_normal_bisa = False
+    else:
+        for label, low, high, _ in kategori_labels:
+            ppf_vals = norm.ppf([low, high], mean_local, std_local)
+            if np.any(np.isnan(ppf_vals)) or np.any(np.isinf(ppf_vals)):
+                kurva_normal_bisa = False
+                break
+
+    if not kurva_normal_bisa:
+        st.warning(f"Tidak bisa menampilkan kurva normal untuk {jabatan_atasan} (NIPP {nipp_atasan}) karena hanya satu nilai, semua nilai sama, atau distribusi tidak valid.")
         fig, ax = plt.subplots(figsize=(8,2))
         ax.bar(df_bawahan['NIPP_Pekerja'].astype(str), df_bawahan['Skor_KPI_Final'], color='grey')
         ax.set_xlabel('NIPP Pekerja')
