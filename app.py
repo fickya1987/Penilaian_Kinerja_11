@@ -127,35 +127,46 @@ for nipp_atasan in df['NIPP_Atasan'].dropna().unique():
         continue
     mean_local = df_bawahan['Skor_KPI_Final'].mean()
     std_local = df_bawahan['Skor_KPI_Final'].std()
-    fig, ax = plt.subplots(figsize=(12, 3))
-    x = np.linspace(90, 110, 1000)
-    y = norm.pdf(x, mean_local, std_local)
-    ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal (bawahan)')
-    for label, low, high, color in kategori_labels:
-        x_fill = norm.ppf([low, high], mean_local, std_local)
-        mask = (x >= x_fill[0]) & (x <= x_fill[1])
-        ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
-        xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
-        ymin = y.min()
-        props = label_props[label]
-        ax.text(xpos, ymin - 0.01, label,
-                ha='center', va='top', fontsize=props['fontsize'],
-                color=props['color'], fontweight=props['weight'],
-                zorder=10)
-    # Titik NIPP per group
-    ax.scatter(df_bawahan['Skor_KPI_Final'], norm.pdf(df_bawahan['Skor_KPI_Final'], mean_local, std_local),
-               color='grey', s=25, alpha=0.7, label="NIPP Pekerja")
-    for i, row in df_bawahan.iterrows():
-        ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_local, std_local)+0.002,
-                str(row['NIPP_Pekerja']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
-    ax.set_xlim(90, 110)
-    ax.set_ylim(y.min() - 0.025, y.max() + 0.02)
-    ax.set_xlabel('Skor KPI')
-    ax.set_ylabel('Densitas')
-    ax.set_title(f"Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})")
-    ax.legend(fontsize=8)
-    plt.subplots_adjust(bottom=0.22)
-    st.pyplot(fig)
+
+    # Tambahan: tangani std=0 atau NaN
+    if np.isnan(std_local) or std_local == 0:
+        st.warning(f"Tidak bisa menampilkan kurva normal untuk {jabatan_atasan} (NIPP {nipp_atasan}) karena hanya satu nilai atau semua nilai sama.")
+        fig, ax = plt.subplots(figsize=(8,2))
+        ax.bar(df_bawahan['NIPP_Pekerja'].astype(str), df_bawahan['Skor_KPI_Final'], color='grey')
+        ax.set_xlabel('NIPP Pekerja')
+        ax.set_ylabel('Skor KPI')
+        ax.set_title(f"Distribusi Skor KPI - {jabatan_atasan} (NIPP {nipp_atasan})")
+        st.pyplot(fig)
+    else:
+        fig, ax = plt.subplots(figsize=(12, 3))
+        x = np.linspace(90, 110, 1000)
+        y = norm.pdf(x, mean_local, std_local)
+        ax.plot(x, y, color='black', linewidth=2, label='Kurva Normal (bawahan)')
+        for label, low, high, color in kategori_labels:
+            x_fill = norm.ppf([low, high], mean_local, std_local)
+            mask = (x >= x_fill[0]) & (x <= x_fill[1])
+            ax.fill_between(x[mask], y[mask], alpha=0.25, color=color, label=label)
+            xpos = np.clip((x_fill[0] + x_fill[1]) / 2, 90, 110)
+            ymin = y.min()
+            props = label_props[label]
+            ax.text(xpos, ymin - 0.01, label,
+                    ha='center', va='top', fontsize=props['fontsize'],
+                    color=props['color'], fontweight=props['weight'],
+                    zorder=10)
+        # Titik NIPP per group
+        ax.scatter(df_bawahan['Skor_KPI_Final'], norm.pdf(df_bawahan['Skor_KPI_Final'], mean_local, std_local),
+                   color='grey', s=25, alpha=0.7, label="NIPP Pekerja")
+        for i, row in df_bawahan.iterrows():
+            ax.text(row['Skor_KPI_Final'], norm.pdf(row['Skor_KPI_Final'], mean_local, std_local)+0.002,
+                    str(row['NIPP_Pekerja']), fontsize=7, ha='center', color='grey', alpha=0.7, rotation=90)
+        ax.set_xlim(90, 110)
+        ax.set_ylim(y.min() - 0.025, y.max() + 0.02)
+        ax.set_xlabel('Skor KPI')
+        ax.set_ylabel('Densitas')
+        ax.set_title(f"Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})")
+        ax.legend(fontsize=8)
+        plt.subplots_adjust(bottom=0.22)
+        st.pyplot(fig)
     # Tabel kategori per atasan
     st.markdown(f"**Tabel Pekerja per Kategori untuk Bawahan dari Atasan: {jabatan_atasan} (NIPP {nipp_atasan})**")
     for kategori in [l[0] for l in kategori_labels[::-1]]:
