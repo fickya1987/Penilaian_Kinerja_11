@@ -4,17 +4,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-# --- Konfigurasi kategori & warna ---
+# ---------------------- KATEGORI ---------------------- #
 kategori_labels = [
-    ("Kurang", 0.00, 0.05, "#FFB3B3"),
-    ("Cukup", 0.05, 0.10, "#FFE3A1"),
-    ("Baik", 0.10, 0.85, "#B3E0FF"),
-    ("Sangat Baik", 0.85, 0.95, "#B3FFB3"),
-    ("Istimewa", 0.95, 1.00, "#FFFACD"),
+    ("Kurang", 0.00, 0.05, "#FFB3B3", "red"),
+    ("Cukup", 0.05, 0.10, "#FFE3A1", "orange"),
+    ("Baik", 0.10, 0.85, "#B3E0FF", "deepskyblue"),
+    ("Sangat Baik", 0.85, 0.95, "#B3FFB3", "green"),
+    ("Istimewa", 0.95, 1.00, "#FFFACD", "gold"),
 ]
-kategori_colors = dict((k[0], k[3]) for k in kategori_labels)
 
-# --- Fungsi pembagian kategori berdasarkan percentile ---
 def kategori_from_score(score, scores):
     percentiles = np.percentile(scores, [5, 10, 85, 95])
     if score < percentiles[0]:
@@ -28,7 +26,7 @@ def kategori_from_score(score, scores):
     else:
         return "Istimewa"
 
-# --- Load data ---
+# ------------------- DATA LOADER ------------------- #
 @st.cache_data
 def load_data():
     df = pd.read_csv("Penilaian_Kinerja.csv")
@@ -36,83 +34,85 @@ def load_data():
     return df
 
 df = load_data()
-
-# Hitung kategori untuk seluruh pegawai
 all_scores = df['Skor_KPI_Final'].values
 df['Kategori_KPI'] = df['Skor_KPI_Final'].apply(lambda x: kategori_from_score(x, all_scores))
 
-# --- Fungsi plot kurva distribusi normal dengan kategori sebagai x-axis ---
+# ------------------- PLOTTING FUNCTION ------------------- #
 def plot_kurva(scores, nipp_list=None, title=None):
     mean_kpi = np.mean(scores)
     std_kpi = np.std(scores)
     x = np.linspace(90, 110, 1000)
     y = norm.pdf(x, mean_kpi, std_kpi)
-    
-    # Plot
-    fig, ax = plt.subplots(figsize=(12,4))
+
+    fig, ax = plt.subplots(figsize=(12, 4))
     # Warnai area kategori
-    xticks = []
-    labels = []
-    for label, pmin, pmax, color in kategori_labels:
+    xlims = []
+    for label, pmin, pmax, color, _ in kategori_labels:
         xmin = np.clip(norm.ppf(pmin, mean_kpi, std_kpi), 90, 110)
         xmax = np.clip(norm.ppf(pmax, mean_kpi, std_kpi), 90, 110)
         ax.fill_between(x, 0, y, where=(x >= xmin) & (x <= xmax), color=color, alpha=0.4)
-        # Posisi label di tengah area
-        xmid = (xmin + xmax) / 2
-        xticks.append(xmid)
-        labels.append(label)
-
-    # Kurva normal
+        xlims.append((xmin, xmax))
     ax.plot(x, y, color='black', linewidth=3, label="Kurva Normal")
-    # Titik pegawai
-    scatter = ax.scatter(scores, np.zeros_like(scores), color='gray', s=40, alpha=0.6, label="NIPP Pekerja")
     if nipp_list is not None:
-        # Tambah label NIPP di bawah titik
-        for xi, nipp in zip(scores, nipp_list):
-            ax.annotate(f"{int(nipp)}", (xi, 0), textcoords="offset points", xytext=(0,10), ha='center', fontsize=7, color='gray', alpha=0.7)
+        ax.scatter(scores, np.zeros_like(scores), color='gray', s=30, alpha=0.7, label="NIPP Pekerja")
 
     ax.set_xlim(90, 110)
-    ax.set_xlabel("Kategori Penilaian", fontsize=13, fontweight='bold')
-    ax.set_ylabel("Densitas", fontsize=13, fontweight='bold')
-    if title: ax.set_title(title, fontsize=18, weight='bold')
-
-    # Set x-ticks ke kategori & warna, fontsize kecil & rata
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(labels, fontsize=13, fontweight='bold')
-    # Hilangkan ticks minor angka
-    ax.tick_params(axis='x', which='minor', bottom=False, top=False, labelbottom=False)
+    ax.set_xlabel("Skor KPI")
+    ax.set_ylabel("Densitas")
+    if title: ax.set_title(title, fontsize=16, weight='bold')
     ax.legend()
+
+    # Secondary axis for kategori
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    # Tempatkan label kategori di tengah area warna
+    ax2.set_xticks([(a+b)/2 for a, b in xlims])
+    ax2.set_xticklabels(
+        [l for l, *_ in kategori_labels],
+        fontsize=13,
+        color=[c for _, _, _, _, c in kategori_labels],
+        fontweight='bold'
+    )
+    ax2.tick_params(axis='x', length=0)
+    ax2.spines['top'].set_visible(False)
+    ax2.set_xlabel("")
     st.pyplot(fig)
 
-# --- APP STREAMLIT ---
+# ------------------- MAIN APP ------------------- #
+
 st.title("Kurva Distribusi Normal KPI Seluruh Pegawai (Korporasi/Pelindo)")
 
-# Kurva seluruh pegawai
-plot_kurva(df['Skor_KPI_Final'].values, nipp_list=df['NIPP_Pekerja'].values, 
-           title="Kurva Distribusi Normal Skor KPI Pegawai Pelindo")
+plot_kurva(df['Skor_KPI_Final'].values, nipp_list=df['NIPP_Pekerja'].values, title="Kurva Distribusi Normal Skor KPI Pegawai Pelindo")
 
-# Tabel Kategori Seluruh Pegawai
-st.subheader("Tabel Pegawai berdasarkan Kategori Penilaian")
-df_tabel = df[['NIPP_Pekerja','Nama_Posisi','Skor_KPI_Final','Kategori_KPI']].sort_values(by='Skor_KPI_Final', ascending=False)
-st.dataframe(df_tabel, hide_index=True)
+st.header("Tabel Pegawai Berdasarkan Kategori KPI (Seluruh Pegawai)")
+for label, _, _, _, _ in kategori_labels:
+    df_label = df[df['Kategori_KPI'] == label][['NIPP_Pekerja', 'Nama_Posisi', 'Skor_KPI_Final']]
+    st.subheader(label)
+    st.write(df_label.reset_index(drop=True))
 
-# --- Distribusi per Atasan Langsung (Group/Dept) ---
-st.header("Kurva Distribusi Normal KPI untuk Tiap Atasan Langsung (Group/Dept)")
-atasans = df['NIPP_Atasan'].dropna().unique()
-selected_atasan = st.selectbox("Pilih NIPP Atasan untuk Melihat Distribusi Kelompok:", sorted(atasans))
-df_group = df[df['NIPP_Atasan']==selected_atasan]
+# Pilihan Group/Atasan
+st.header("Analisis Per Group/Atasan Langsung")
+pilihan_atasan = st.selectbox(
+    "Pilih Atasan Langsung (Nama_Posisi):",
+    sorted(df['Nama_Posisi'].unique())
+)
+df_group = df[df['Nama_Posisi'] == pilihan_atasan]
 
-if len(df_group) > 2:
-    plot_kurva(df_group['Skor_KPI_Final'].values, nipp_list=df_group['NIPP_Pekerja'].values, 
-               title=f"Bawahan dari Atasan NIPP {selected_atasan} ({df_group.iloc[0]['Nama_Posisi']})")
-    # Tabel kategori untuk group
-    st.subheader("Tabel Pegawai dalam Group/Dept ini")
-    df_group_tabel = df_group[['NIPP_Pekerja','Nama_Posisi','Skor_KPI_Final','Kategori_KPI']].sort_values(by='Skor_KPI_Final', ascending=False)
-    st.dataframe(df_group_tabel, hide_index=True)
+if len(df_group) > 1:
+    group_scores = df_group['Skor_KPI_Final'].values
+    st.subheader(f"Kurva Distribusi Normal Pegawai {pilihan_atasan}")
+    plot_kurva(group_scores, nipp_list=df_group['NIPP_Pekerja'].values,
+               title=f"Kurva Distribusi Normal KPI Pegawai {pilihan_atasan}")
+
+    # Kategori tabel per group
+    st.subheader(f"Tabel Pegawai Berdasarkan Kategori KPI ({pilihan_atasan})")
+    group_scores_all = df_group['Skor_KPI_Final'].values
+    for label, _, _, _, _ in kategori_labels:
+        df_label = df_group[
+            df_group['Skor_KPI_Final'].apply(lambda x: kategori_from_score(x, group_scores_all)) == label
+        ][['NIPP_Pekerja', 'Nama_Posisi', 'Skor_KPI_Final']]
+        st.markdown(f"**{label}**")
+        st.write(df_label.reset_index(drop=True))
 else:
-    st.warning("Tidak cukup data untuk membuat distribusi normal di group ini.")
-
-# Statistik ringkas
-st.header("Statistik Ringkas Penilaian Seluruh Pegawai")
-st.write(df['Kategori_KPI'].value_counts(normalize=True).apply(lambda x: f"{x*100:.1f}%"))
+    st.info("Data group terlalu sedikit untuk menampilkan kurva distribusi normal.")
 
